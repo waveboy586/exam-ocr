@@ -105,6 +105,8 @@ function normalize_type($t)
     return "essay";
   if (in_array($t, ["short_answer", "short", "text", "subjective", "subjective_subparts"]))
     return "short_answer";
+  if (in_array($t, ["short_answer_number", "number", "numeric"]))
+    return "short_answer_number";
   if (in_array($t, ["instruction", "header", "info"]))
     return "instruction";
   return $t ?: "short_answer";
@@ -452,6 +454,7 @@ foreach ($sections as $s) {
                 <select class="qType" data-qtype>
                   <option value="multiple_choice" <?= $qType === 'multiple_choice' ? 'selected' : '' ?>>ตัวเลือก</option>
                   <option value="short_answer" <?= $qType === 'short_answer' ? 'selected' : '' ?>>คำตอบสั้น</option>
+                  <option value="short_answer_number" <?= $qType === 'short_answer_number' ? 'selected' : '' ?>>คำตอบสั้น (ตัวเลข)</option>
                   <option value="essay" <?= $qType === 'essay' ? 'selected' : '' ?>>คำตอบยาว</option>
                   <option value="instruction" <?= $qType === 'instruction' ? 'selected' : '' ?>>ข้อความ/คำชี้แจง</option>
                 </select>
@@ -478,11 +481,12 @@ foreach ($sections as $s) {
               <div class="answerBox" data-answer
                 style="<?= ($qType !== 'multiple_choice' && $qType !== 'instruction') ? '' : 'display:none' ?>">
 
-                <div class="subWrap" data-subwrap style="<?= $qType === 'short_answer' ? '' : 'display:none' ?>">
+                <div class="subWrap" data-subwrap style="<?= ($qType === 'short_answer' || $qType === 'short_answer_number') ? '' : 'display:none' ?>">
                   <div style="margin-bottom:12px; border-bottom:1px solid #eee; padding-bottom:12px;">
                     <div class="mutedSmall" style="margin-bottom:6px;">เฉลยคำตอบ (กรณีไม่มีข้อย่อย หรือเป็นคำตอบรวม):</div>
                     <input class="optInput" data-main-answer placeholder="ระบุคำตอบที่ถูกต้อง..."
-                      value="<?= htmlspecialchars((string) ($q['answer'] ?? '')) ?>" style="width:100%;" />
+                      value="<?= htmlspecialchars((string) ($q['answer'] ?? '')) ?>" style="width:100%;"
+                      <?= $qType === 'short_answer_number' ? 'type="number" step="any"' : '' ?> />
                   </div>
 
                   <div class="mutedSmall" style="margin:0 0 8px;">โจทย์ย่อย (ถ้ามี):</div>
@@ -570,6 +574,16 @@ foreach ($sections as $s) {
       if (type === 'short_answer') {
         if (subWrap) subWrap.style.display = '';
         if (essayWrap) essayWrap.style.display = 'none';
+        // Reset main-answer input to text mode
+        const mainAns = card.querySelector('[data-main-answer]');
+        if (mainAns) { mainAns.type = 'text'; mainAns.placeholder = 'ระบุคำตอบที่ถูกต้อง...'; }
+        ensureAtLeastOneSub(card);
+      } else if (type === 'short_answer_number') {
+        if (subWrap) subWrap.style.display = '';
+        if (essayWrap) essayWrap.style.display = 'none';
+        // Switch main-answer input to number mode
+        const mainAns = card.querySelector('[data-main-answer]');
+        if (mainAns) { mainAns.type = 'number'; mainAns.step = 'any'; mainAns.placeholder = 'ระบุคำตอบ (ตัวเลข)...'; }
         ensureAtLeastOneSub(card);
       } else if (type === 'essay') {
         if (subWrap) subWrap.style.display = 'none';
@@ -587,6 +601,7 @@ foreach ($sections as $s) {
     function addSubQuestion(card, qText = '', aText = '') {
       const list = card.querySelector('[data-sublist]');
       if (!list) return;
+      const isNumber = card.querySelector('[data-qtype]')?.value === 'short_answer_number';
       const row = document.createElement('div');
       row.className = 'optRow';
       row.setAttribute('data-subrow', '');
@@ -594,7 +609,8 @@ foreach ($sections as $s) {
     <div style="width:18px;height:18px;border-radius:6px;border:2px solid var(--line);flex:0 0 auto"></div>
     <div class="optInput editable-content" data-subq contenteditable="true" 
          placeholder="โจทย์ย่อย (ถ้ามี)" style="flex:1; min-height:30px;">${qText}</div>
-    <input class="optInput" data-suba placeholder="คำตอบ" value="${escapeHtml(aText)}" style="max-width:220px" />
+    <input class="optInput" data-suba type="${isNumber ? 'number' : 'text'}" ${isNumber ? 'step="any"' : ''}
+           placeholder="${isNumber ? 'คำตอบ (ตัวเลข)' : 'คำตอบ'}" value="${escapeHtml(aText)}" style="max-width:220px" />
     <button type="button" class="trash" data-delsub title="ลบโจทย์ย่อย">🗑️</button>
   `;
       list.appendChild(row);
@@ -645,6 +661,7 @@ foreach ($sections as $s) {
           <select class="qType" data-qtype>
             <option value="multiple_choice" ${defaultType === 'multiple_choice' ? 'selected' : ''}>ตัวเลือก</option>
             <option value="short_answer" ${defaultType === 'short_answer' ? 'selected' : ''}>คำตอบสั้น</option>
+            <option value="short_answer_number" ${defaultType === 'short_answer_number' ? 'selected' : ''}>คำตอบสั้น (ตัวเลข)</option>
             <option value="essay" ${defaultType === 'essay' ? 'selected' : ''}>คำตอบยาว</option>
             <option value="instruction" ${defaultType === 'instruction' ? 'selected' : ''}>ข้อความ/คำชี้แจง</option>
           </select>
@@ -653,10 +670,14 @@ foreach ($sections as $s) {
           <button type="button" class="btn" style="margin-top:8px" data-addopt>+ เพิ่มตัวเลือก</button>
         </div>
         <div class="answerBox" data-answer style="${(defaultType === 'multiple_choice' || defaultType === 'instruction') ? 'display:none' : ''}">
-          <div class="subWrap" data-subwrap style="${defaultType === 'short_answer' ? '' : 'display:none'}">
+          <div class="subWrap" data-subwrap style="${(defaultType === 'short_answer' || defaultType === 'short_answer_number') ? '' : 'display:none'}">
             <div style="margin-bottom:12px; border-bottom:1px solid #eee; padding-bottom:12px;">
                 <div class="mutedSmall" style="margin-bottom:6px;">เฉลยคำตอบ (กรณีไม่มีข้อย่อย หรือเป็นคำตอบรวม):</div>
-                <input class="optInput" data-main-answer placeholder="ระบุคำตอบที่ถูกต้อง..." style="width:100%;" />
+                <input class="optInput" data-main-answer
+                  type="${defaultType === 'short_answer_number' ? 'number' : 'text'}"
+                  ${defaultType === 'short_answer_number' ? 'step="any"' : ''}
+                  placeholder="${defaultType === 'short_answer_number' ? 'ระบุคำตอบ (ตัวเลข)...' : 'ระบุคำตอบที่ถูกต้อง...'}"
+                  style="width:100%;" />
             </div>
             <div class="mutedSmall" style="margin:0 0 8px;">โจทย์ย่อย (ถ้ามี):</div>
             <div data-sublist></div>
@@ -974,7 +995,7 @@ foreach ($sections as $s) {
       document.querySelectorAll('[data-qcard]').forEach(card => {
         const jsonStr = card.dataset.subjson;
         const type = card.querySelector('[data-qtype]').value;
-        if (type === 'short_answer' && jsonStr) {
+        if ((type === 'short_answer' || type === 'short_answer_number') && jsonStr) {
           try {
             const arr = JSON.parse(jsonStr);
             if (Array.isArray(arr) && arr.length > 0) {
@@ -1040,7 +1061,7 @@ foreach ($sections as $s) {
                     });
                   }
                 });
-              } else if (qType === 'short_answer') {
+              } else if (qType === 'short_answer' || qType === 'short_answer_number') {
                 qObj.essay_answer = card.querySelector('[data-main-answer]')?.value?.trim() ?? '';
                 qObj.sub_questions = [];
                 card.querySelectorAll('[data-subrow]').forEach((row) => {

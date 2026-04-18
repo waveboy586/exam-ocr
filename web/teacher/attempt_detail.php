@@ -28,7 +28,7 @@ function h($s): string
 /**
  * Render block โจทย์ย่อยจาก exam_sub_answers
  */
-function render_sub_answers(array $subRows, array $labels): void
+function render_sub_answers(array $subRows, array $labels, array $subAnswerKeyMap = []): void
 {
   if (empty($subRows)) return;
   echo '<div class="subAnswersSection">';
@@ -63,6 +63,17 @@ function render_sub_answers(array $subRows, array $labels): void
     echo '<div class="answerBox' . ($ansIsHtml ? ' has-html' : '') . '">';
     echo safe_html($ansText !== '' ? $ansText : '-');
     echo '</div>';
+
+    // ── เฉลยโจทย์ย่อย ──
+    $subQId  = (int)($sa['sub_question_id'] ?? 0);
+    $subAKey = trim((string)($subAnswerKeyMap[$subQId] ?? ''));
+    if ($subAKey !== '') {
+      $subAKIsHtml = $subAKey !== strip_tags($subAKey);
+      echo '<div class="answerKeyBox' . ($subAKIsHtml ? ' has-html' : '') . '">';
+      echo '<span class="answerKeyLabel"> เฉลย:</span> ';
+      echo safe_html($subAKey);
+      echo '</div>';
+    }
 
     if ($feedback !== '') {
     }
@@ -410,8 +421,77 @@ foreach ($answers as $row) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// ── ดึงเฉลยคำตอบ ──
+// ══════════════════════════════════════════════════════════════
+$correctChoiceMap  = [];  // [question_id => choice_text]   — เฉลยปรนัย
+$questionAnswerMap = [];  // [question_id => answer]         — เฉลยอัตนัย
+$subAnswerKeyMap   = [];  // [sub_question_id => sub_answer] — เฉลยโจทย์ย่อย
+
+if (!empty($answers)) {
+  $allQIds = array_values(array_unique(array_filter(
+    array_column($answers, 'question_id'),
+    fn($v) => (int)$v > 0
+  )));
+
+  if (!empty($allQIds)) {
+    $inP   = implode(',', array_fill(0, count($allQIds), '?'));
+    $types = str_repeat('i', count($allQIds));
+
+    // เฉลยปรนัย: ดึง choice ที่ is_correct = 1
+    try {
+      $stC = $conn->prepare(
+        "SELECT question_id, choice_text FROM choices WHERE question_id IN ({$inP}) AND is_correct = 1"
+      );
+      $stC->bind_param($types, ...$allQIds);
+      $stC->execute();
+      foreach ($stC->get_result()->fetch_all(MYSQLI_ASSOC) as $c) {
+        $correctChoiceMap[(int)$c['question_id']] = (string)$c['choice_text'];
+      }
+    } catch (Throwable $e) {}
+
+    // เฉลยอัตนัย: ดึง answer จาก questions
+    try {
+      $stA = $conn->prepare(
+        "SELECT id, answer FROM questions WHERE id IN ({$inP})"
+      );
+      $stA->bind_param($types, ...$allQIds);
+      $stA->execute();
+      foreach ($stA->get_result()->fetch_all(MYSQLI_ASSOC) as $q) {
+        $questionAnswerMap[(int)$q['id']] = (string)($q['answer'] ?? '');
+      }
+    } catch (Throwable $e) {}
+  }
+}
+
+// เฉลยโจทย์ย่อย: ดึง sub_answer จาก sub_questions
+if (!empty($subAnswersRaw)) {
+  $allSubQIds = array_values(array_unique(array_filter(
+    array_column($subAnswersRaw, 'sub_question_id'),
+    fn($v) => $v !== null && (int)$v > 0
+  )));
+
+  if (!empty($allSubQIds)) {
+    $inP2   = implode(',', array_fill(0, count($allSubQIds), '?'));
+    $types2 = str_repeat('i', count($allSubQIds));
+    try {
+      // ตรวจก่อนว่าคอลัมน์ sub_answer มีอยู่
+      $chkCol = $conn->query("SHOW COLUMNS FROM `sub_questions` LIKE 'sub_answer'");
+      if ($chkCol && $chkCol->num_rows > 0) {
+        $stSA = $conn->prepare(
+          "SELECT id, sub_answer FROM sub_questions WHERE id IN ({$inP2})"
+        );
+        $stSA->bind_param($types2, ...$allSubQIds);
+        $stSA->execute();
+        foreach ($stSA->get_result()->fetch_all(MYSQLI_ASSOC) as $sq) {
+          $subAnswerKeyMap[(int)$sq['id']] = (string)($sq['sub_answer'] ?? '');
+        }
+      }
+    } catch (Throwable $e) {}
+  }
+}
+
 // สร้างข้อความแสดงผู้เข้าสอบ
-$userDisplay = "user_id: " . (int)$attempt['user_id'];
 $userMeta = "";
 if ($hasUsers) {
   $full = trim((string)($attempt['user_full_name'] ?? ""));
@@ -881,6 +961,35 @@ $saved = isset($_GET['saved']) && $_GET['saved'] === '1';
       background: #fffbeb;
     }
 
+    /* ── answer key (เฉลย) — minimal ── */
+    .answerKeyBox {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #6b7280;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .answerKeyBox.has-html {
+      white-space: normal;
+      line-height: 1.6;
+    }
+
+    .answerKeyBox.has-html img {
+      max-width: 100%;
+      border-radius: 6px;
+    }
+
+    .answerKeyLabel {
+      font-weight: 700;
+      color: #306e47;
+      flex-shrink: 0;
+    }
+
     .summaryRow {
       display: flex;
       gap: 16px;
@@ -1043,12 +1152,41 @@ $saved = isset($_GET['saved']) && $_GET['saved'] === '1';
                           <?php endif; ?>
                           <div class="muted" style="margin:4px 0 6px;">คำตอบ</div>
                           <div class="answerBox<?= $ansIsHtml ? ' has-html' : '' ?>"><?= safe_html($answerShow) ?></div>
+                          <?php
+                          // ── เฉลย (GROUP row) ──
+                          $gQid = (int)($row['question_id'] ?? 0);
+                          $gSubRows = $subAnswersMap[$gQid] ?? [];
+                          if (!empty($row['selected_choice_id'])) {
+                            // ปรนัย
+                            $gKey = $correctChoiceMap[$gQid] ?? '';
+                            if ($gKey !== ''):
+                              $gKeyIsHtml = $gKey !== strip_tags($gKey);
+                          ?>
+                            <div class="answerKeyBox<?= $gKeyIsHtml ? ' has-html' : '' ?>">
+                              <span class="answerKeyLabel"> เฉลย:</span> <?= safe_html($gKey) ?>
+                            </div>
+                          <?php
+                            endif;
+                          } elseif (empty($gSubRows)) {
+                            // อัตนัยแบบข้อเดี่ยว (ไม่มีโจทย์ย่อย)
+                            $gKey = $questionAnswerMap[$gQid] ?? '';
+                            if ($gKey !== ''):
+                              $gKeyIsHtml = $gKey !== strip_tags($gKey);
+                          ?>
+                            <div class="answerKeyBox<?= $gKeyIsHtml ? ' has-html' : '' ?>">
+                              <span class="answerKeyLabel"> เฉลย:</span> <?= safe_html($gKey) ?>
+                            </div>
+                          <?php
+                            endif;
+                          }
+                          ?>
                           <?php if (($row['feedback'] ?? '') !== ''): ?>
 
                           <?php endif; ?>
                           <?php render_sub_answers(
                             $subAnswersMap[(int)($row['question_id'] ?? 0)] ?? [],
-                            $subLabels
+                            $subLabels,
+                            $subAnswerKeyMap
                           ); ?>
                         </td>
                         <td class="mono"><?= h($type) ?></td>
@@ -1091,12 +1229,41 @@ $saved = isset($_GET['saved']) && $_GET['saved'] === '1';
                         <div class="qtext<?= $qIsHtml ? ' has-html' : '' ?>"><?= safe_html($qRaw ?: '-') ?></div>
                         <div class="muted" style="margin:6px 0 6px;">คำตอบ</div>
                         <div class="answerBox<?= $ansIsHtml ? ' has-html' : '' ?>"><?= safe_html($answerShow) ?></div>
+                        <?php
+                        // ── เฉลย (STANDALONE row) ──
+                        $sQid = (int)($row['question_id'] ?? 0);
+                        $sSubRows = $subAnswersMap[$sQid] ?? [];
+                        if (!empty($row['selected_choice_id'])) {
+                          // ปรนัย
+                          $sKey = $correctChoiceMap[$sQid] ?? '';
+                          if ($sKey !== ''):
+                            $sKeyIsHtml = $sKey !== strip_tags($sKey);
+                        ?>
+                          <div class="answerKeyBox<?= $sKeyIsHtml ? ' has-html' : '' ?>">
+                            <span class="answerKeyLabel"> เฉลย:</span> <?= safe_html($sKey) ?>
+                          </div>
+                        <?php
+                          endif;
+                        } elseif (empty($sSubRows)) {
+                          // อัตนัยแบบข้อเดี่ยว (ไม่มีโจทย์ย่อย)
+                          $sKey = $questionAnswerMap[$sQid] ?? '';
+                          if ($sKey !== ''):
+                            $sKeyIsHtml = $sKey !== strip_tags($sKey);
+                        ?>
+                          <div class="answerKeyBox<?= $sKeyIsHtml ? ' has-html' : '' ?>">
+                            <span class="answerKeyLabel"> เฉลย:</span> <?= safe_html($sKey) ?>
+                          </div>
+                        <?php
+                          endif;
+                        }
+                        ?>
                         <?php if (($row['feedback'] ?? '') !== ''): ?>
 
                         <?php endif; ?>
                         <?php render_sub_answers(
                           $subAnswersMap[(int)($row['question_id'] ?? 0)] ?? [],
-                          $subLabels
+                          $subLabels,
+                          $subAnswerKeyMap
                         ); ?>
                       </td>
                       <td class="mono"><?= h($type) ?></td>
