@@ -111,16 +111,16 @@ $stats = [
 $st = $conn->prepare("
   SELECT
     COUNT(*) AS attempt_total,
-    SUM(CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' THEN 1 ELSE 0 END) AS submitted_total,
-    SUM(CASE WHEN submitted_at IS NULL OR submitted_at = '' THEN 1 ELSE 0 END) AS inprogress_total,
-    COUNT(DISTINCT CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' THEN user_id ELSE NULL END) AS distinct_users_submitted,
-    AVG(CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' THEN score_total ELSE NULL END) AS avg_score,
-    AVG(CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' AND score_max > 0 THEN (score_total/score_max)*100 ELSE NULL END) AS avg_pct,
-    MIN(CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' THEN score_total ELSE NULL END) AS min_score,
-    MAX(CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' THEN score_total ELSE NULL END) AS max_score,
-    AVG(CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' THEN TIMESTAMPDIFF(SECOND, started_at, submitted_at) ELSE NULL END) AS avg_duration_sec,
-    MIN(CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' THEN TIMESTAMPDIFF(SECOND, started_at, submitted_at) ELSE NULL END) AS min_duration_sec,
-    MAX(CASE WHEN submitted_at IS NOT NULL AND submitted_at <> '' THEN TIMESTAMPDIFF(SECOND, started_at, submitted_at) ELSE NULL END) AS max_duration_sec
+    SUM(CASE WHEN submitted_at IS NOT NULL THEN 1 ELSE 0 END) AS submitted_total,
+    SUM(CASE WHEN submitted_at IS NULL THEN 1 ELSE 0 END) AS inprogress_total,
+    COUNT(DISTINCT CASE WHEN submitted_at IS NOT NULL THEN user_id ELSE NULL END) AS distinct_users_submitted,
+    AVG(CASE WHEN submitted_at IS NOT NULL THEN score_total ELSE NULL END) AS avg_score,
+    AVG(CASE WHEN submitted_at IS NOT NULL AND score_max > 0 THEN (score_total/score_max)*100 ELSE NULL END) AS avg_pct,
+    MIN(CASE WHEN submitted_at IS NOT NULL THEN score_total ELSE NULL END) AS min_score,
+    MAX(CASE WHEN submitted_at IS NOT NULL THEN score_total ELSE NULL END) AS max_score,
+    AVG(CASE WHEN submitted_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, started_at, submitted_at) ELSE NULL END) AS avg_duration_sec,
+    MIN(CASE WHEN submitted_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, started_at, submitted_at) ELSE NULL END) AS min_duration_sec,
+    MAX(CASE WHEN submitted_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, started_at, submitted_at) ELSE NULL END) AS max_duration_sec
   FROM exam_attempts
   WHERE exam_id = ?
 ");
@@ -141,7 +141,7 @@ $scorePairs = []; // [score_total, score_max]
 $st = $conn->prepare("
   SELECT score_total, score_max
   FROM exam_attempts
-  WHERE exam_id = ? AND submitted_at IS NOT NULL AND submitted_at <> ''
+  WHERE exam_id = ? AND submitted_at IS NOT NULL
   ORDER BY id ASC
   LIMIT 20000
 ");
@@ -177,7 +177,7 @@ $dailyMap = []; // Y-m-d => count
 $st = $conn->prepare("
   SELECT DATE(submitted_at) AS d, COUNT(*) AS c
   FROM exam_attempts
-  WHERE exam_id = ? AND submitted_at IS NOT NULL AND submitted_at <> '' AND submitted_at >= ?
+  WHERE exam_id = ? AND submitted_at IS NOT NULL AND submitted_at >= ?
   GROUP BY DATE(submitted_at)
   ORDER BY DATE(submitted_at) ASC
 ");
@@ -325,7 +325,7 @@ $st = $conn->prepare("
   FROM exam_answers ea
   JOIN exam_attempts a ON a.id = ea.attempt_id
   {$joinChoicesForCorrect}
-  WHERE a.exam_id = ? AND a.submitted_at IS NOT NULL AND a.submitted_at <> ''
+  WHERE a.exam_id = ? AND a.submitted_at IS NOT NULL
   GROUP BY ea.question_id
 ");
 $st->bind_param("i", $exam_id);
@@ -350,7 +350,7 @@ if ($ansChoiceCol) {
     SELECT ea.question_id, ea.{$ansChoiceCol} AS choice_id, COUNT(*) AS c
     FROM exam_answers ea
     JOIN exam_attempts a ON a.id = ea.attempt_id
-    WHERE a.exam_id = ? AND a.submitted_at IS NOT NULL AND a.submitted_at <> ''
+    WHERE a.exam_id = ? AND a.submitted_at IS NOT NULL
       AND ea.{$ansChoiceCol} IS NOT NULL
     GROUP BY ea.question_id, ea.{$ansChoiceCol}
   ");

@@ -1,7 +1,21 @@
+.git
+.gitignore
 .env
 venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.vscode/
+.idea/
+*.md
+!README.md
+How to.txt
+node_modules/
+npm-debug.log
 web/teacher/uploads/*
 !web/teacher/uploads/.gitkeep
 web/teacher/storage/logs/*
@@ -12,3 +26,6 @@ web/teacher/auto_grade_jobs/*
 exam_cleaned_output.md
 exam_data.json
 exam_questions.json
+*.log
+.DS_Store
+Thumbs.db

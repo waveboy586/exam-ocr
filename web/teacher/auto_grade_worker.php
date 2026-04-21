@@ -19,7 +19,18 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 // ══════════════════════════════════════════════════════════════
 require_once 'config.php';
 
-$PYTHON_CLI = 'C:\\xampp\\htdocs\\exam-ocr\\venv\\Scripts\\python.exe';
+// Python binary — priority: PYTHON_BIN env → Windows venv → python3 → python
+$PYTHON_CLI = getenv('PYTHON_BIN') ?: '';
+if ($PYTHON_CLI === '' || !@file_exists($PYTHON_CLI)) {
+    $winVenv = 'C:\\xampp\\htdocs\\exam-ocr\\venv\\Scripts\\python.exe';
+    if (@file_exists($winVenv)) {
+        $PYTHON_CLI = $winVenv;
+    } elseif (PHP_OS_FAMILY === 'Windows') {
+        $PYTHON_CLI = 'python';
+    } else {
+        $PYTHON_CLI = '/usr/bin/python3';
+    }
+}
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS
@@ -164,22 +175,24 @@ function runPythonFileBased(
         throw new RuntimeException("เขียน temp input file ไม่ได้: {$inFile}");
     }
 
+    $isWin   = PHP_OS_FAMILY === 'Windows';
+    $pathSep = $isWin ? ';' : ':';
     $venvDir = dirname(dirname($pythonCli));
-    $venvBin = $venvDir . DIRECTORY_SEPARATOR . 'Scripts';
+    $venvBin = $venvDir . DIRECTORY_SEPARATOR . ($isWin ? 'Scripts' : 'bin');
     $hfHome  = $tmp . DIRECTORY_SEPARATOR . 'hf_cache';
     if (!is_dir($hfHome)) @mkdir($hfHome, 0777, true);
 
     $env = [
         'PYTHONHOME'            => '',
         'PYTHONPATH'            => '',
-        'VIRTUAL_ENV'           => $venvDir,
-        'PATH'                  => $venvBin . ';' . (getenv('PATH') ?: ''),
+        'VIRTUAL_ENV'           => is_dir($venvBin) ? $venvDir : '',
+        'PATH'                  => (is_dir($venvBin) ? $venvBin . $pathSep : '') . (getenv('PATH') ?: ''),
         'PYTHONIOENCODING'      => 'utf-8',
         'PYTHONUNBUFFERED'      => '1',
         'TEMP'                  => $tmp,
         'TMP'                   => $tmp,
-        'SYSTEMROOT'            => getenv('SYSTEMROOT') ?: 'C:\\Windows',
-        'SystemRoot'            => getenv('SystemRoot')  ?: 'C:\\Windows',
+        'SYSTEMROOT'            => getenv('SYSTEMROOT') ?: ($isWin ? 'C:\\Windows' : ''),
+        'SystemRoot'            => getenv('SystemRoot')  ?: ($isWin ? 'C:\\Windows' : ''),
         'HF_HOME'               => $hfHome,
         'HUGGINGFACE_HUB_CACHE' => $hfHome . DIRECTORY_SEPARATOR . 'hub',
         'TRANSFORMERS_CACHE'    => $hfHome . DIRECTORY_SEPARATOR . 'hub',
@@ -196,9 +209,10 @@ function runPythonFileBased(
          . ' ' . escapeshellarg($inFile)
          . ' ' . escapeshellarg($outFile);
 
+    $nullDev     = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
     $descriptors = [
-        0 => ['file', 'NUL', 'r'],
-        1 => ['file', 'NUL', 'w'],
+        0 => ['file', $nullDev, 'r'],
+        1 => ['file', $nullDev, 'w'],
         2 => ['file', $errFile, 'w'],
     ];
 

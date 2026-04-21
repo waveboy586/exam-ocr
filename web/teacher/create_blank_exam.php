@@ -40,9 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['ac
     exit;
   }
 
-  $pythonExec = "C:/xampp/htdocs/exam-ocr/venv/Scripts/python.exe";
-  if (!file_exists($pythonExec)) {
-    $pythonExec = "python";
+  $pythonExec = getenv('PYTHON_BIN') ?: "C:/xampp/htdocs/exam-ocr/venv/Scripts/python.exe";
+  if (!@file_exists($pythonExec)) {
+    $pythonExec = PHP_OS_FAMILY === 'Windows' ? 'python' : '/usr/bin/python3';
   }
 
   $command = $pythonExec . " " . escapeshellarg($pythonScript) . " " . escapeshellarg($tempFile);

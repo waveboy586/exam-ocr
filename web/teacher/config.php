@@ -1,15 +1,15 @@
 <?php
 // config.php
-$host = 'localhost';
-$db   = 'exam_ocr';
-$user = 'root';
-$pass = '';
-$charset = 'utf8mb4';
+$host    = getenv('DB_HOST')     ?: 'localhost';
+$db      = getenv('DB_NAME')     ?: 'exam_ocr';
+$user    = getenv('DB_USER')     ?: 'root';
+$pass    = getenv('DB_PASSWORD') ?: '';
+$charset = getenv('DB_CHARSET')  ?: 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 
 $conn = new mysqli($host, $user, $pass, $db);
-$conn->set_charset("utf8mb4");
+$conn->set_charset($charset);
 
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,

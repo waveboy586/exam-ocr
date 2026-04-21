@@ -45,12 +45,10 @@ if (!move_uploaded_file($f['tmp_name'], $pdfPath)) {
   fail("ย้ายไฟล์ไป storage ไม่สำเร็จ");
 }
 
-// 4) ระบุ python ที่จะใช้ (สำคัญมากบน Windows)
-// แนะนำให้ชี้ไปที่ venv ของโปรเจคคุณ
-$python = $projectRoot . DIRECTORY_SEPARATOR . "venv" . DIRECTORY_SEPARATOR . "Scripts" . DIRECTORY_SEPARATOR . "python.exe";
-if (!file_exists($python)) {
-  // fallback (ถ้ามี python ใน PATH)
-  $python = "python";
+// 4) ระบุ python ที่จะใช้ (PYTHON_BIN env → Windows venv → python3/python)
+$python = getenv('PYTHON_BIN') ?: ($projectRoot . DIRECTORY_SEPARATOR . "venv" . DIRECTORY_SEPARATOR . "Scripts" . DIRECTORY_SEPARATOR . "python.exe");
+if (!@file_exists($python)) {
+  $python = PHP_OS_FAMILY === 'Windows' ? 'python' : '/usr/bin/python3';
 }
 
 // 5) สั่งรัน ocr.py -> md และ parse_exam.py -> json

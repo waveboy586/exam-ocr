@@ -123,7 +123,10 @@ $venvPython  = $projectRoot . '/venv/Scripts/python.exe';
 $ocrScript   = $projectRoot . '/ocr.py';
 $parseScript = $projectRoot . '/parse_exam.py';
 
-$pythonExe = file_exists($venvPython) ? $venvPython : 'python';
+$pythonExe = getenv('PYTHON_BIN') ?: ($projectRoot . '/venv/Scripts/python.exe');
+if (!@file_exists($pythonExe)) {
+    $pythonExe = PHP_OS_FAMILY === 'Windows' ? 'python' : '/usr/bin/python3';
+}
 
 $baseName = pathinfo($newFilename, PATHINFO_FILENAME);
 $mdFile   = $outputDir . '/' . $baseName . '.md';

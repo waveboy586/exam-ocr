@@ -1,0 +1,83 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: exam-ocr-web:latest
+    container_name: exam_ocr_web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      DB_HOST: db
+      DB_NAME: ${DB_NAME:-exam_ocr}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-rootpass}
+      DB_CHARSET: utf8mb4
+      PYTHON_BIN: /opt/venv/bin/python
+      TYPHOON_API_KEY: ${TYPHOON_API_KEY:-}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+    volumes:
+      - ./web:/var/www/html/web
+      - ./ocr.py:/var/www/html/ocr.py:ro
+      - ./parse_exam.py:/var/www/html/parse_exam.py:ro
+      - ./import_to_mysql.py:/var/www/html/import_to_mysql.py:ro
+      - exam_uploads:/var/www/html/web/teacher/uploads
+      - exam_storage:/var/www/html/web/teacher/storage
+      - exam_jobs:/var/www/html/web/teacher/auto_grade_jobs
+      - hf_cache:/tmp/hf_cache
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - exam_net
+
+  db:
+    image: mysql:8.0
+    container_name: exam_ocr_db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${DB_NAME:-exam_ocr}
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-rootpass}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - exam_net
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: exam_ocr_pma
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 256M
+    ports:
+      - "8081:80"
+    depends_on:
+      - db
+    networks:
+      - exam_net
+
+volumes:
+  db_data:
+  exam_uploads:
+  exam_storage:
+  exam_jobs:
+  hf_cache:
+
+networks:
+  exam_net:
+    driver: bridge

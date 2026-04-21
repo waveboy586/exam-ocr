@@ -187,10 +187,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_pdf_teacher'])
                                 throw new Exception('ไม่พบไฟล์ parse_exam.py ที่ ' . $parse_script);
                             }
 
-                            // ใช้ Python จาก venv ของโปรเจค
-                            $python = $project_root . DIRECTORY_SEPARATOR . 'venv' . DIRECTORY_SEPARATOR . 'Scripts' . DIRECTORY_SEPARATOR . 'python.exe';
-                            if (!file_exists($python)) {
-                                throw new Exception("Python venv not found: " . $python);
+                            // ใช้ Python จาก env (Docker) → venv (Windows) → system python
+                            $python = getenv('PYTHON_BIN') ?: ($project_root . DIRECTORY_SEPARATOR . 'venv' . DIRECTORY_SEPARATOR . 'Scripts' . DIRECTORY_SEPARATOR . 'python.exe');
+                            if (!@file_exists($python)) {
+                                $python = PHP_OS_FAMILY === 'Windows' ? 'python' : '/usr/bin/python3';
                             }
 
                             // 1) OCR: pdf -> md

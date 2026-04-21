@@ -3,13 +3,13 @@ import mysql.connector
 import sys
 import os
 
-# การตั้งค่า Database (ต้องตรงกับ config.php)
+# การตั้งค่า Database (ต้องตรงกับ config.php — อ่านจาก env)
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "exam_ocr",
-    "charset": "utf8mb4",
+    "host":     os.getenv("DB_HOST",     "localhost"),
+    "user":     os.getenv("DB_USER",     "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "database": os.getenv("DB_NAME",     "exam_ocr"),
+    "charset":  os.getenv("DB_CHARSET",  "utf8mb4"),
 }
 
 def update_exam_in_mysql(json_path):

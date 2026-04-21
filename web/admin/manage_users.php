@@ -18,10 +18,13 @@ if (($_POST['action'] ?? '') === 'run_ocr') {
     $path = $uploadDir . time() . '.pdf';
     move_uploaded_file($file['tmp_name'], $path);
 
-    $pythonVenv = 'C:\xampp\htdocs\exam-ocr\venv\Scripts\python.exe';
+    $pythonVenv = getenv('PYTHON_BIN') ?: 'C:\xampp\htdocs\exam-ocr\venv\Scripts\python.exe';
+    if (!@file_exists($pythonVenv)) {
+        $pythonVenv = PHP_OS_FAMILY === 'Windows' ? 'python' : '/usr/bin/python3';
+    }
     $scriptPath = __DIR__ . DIRECTORY_SEPARATOR . 'ocr_processor.py';
 
-    $command = "\"$pythonVenv\" \"$scriptPath\" " . escapeshellarg($path) . " 2>&1";
+    $command = escapeshellarg($pythonVenv) . " " . escapeshellarg($scriptPath) . " " . escapeshellarg($path) . " 2>&1";
     $output = shell_exec($command);
 
     if (file_exists($path)) unlink($path);

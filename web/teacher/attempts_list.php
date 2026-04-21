@@ -184,8 +184,8 @@ if ($exam_id <= 0) {
             e.id,
             e.title,
             COUNT(a.id) AS attempt_count,
-            SUM(CASE WHEN a.submitted_at IS NOT NULL AND a.submitted_at <> '' THEN 1 ELSE 0 END) AS submitted_count,
-            MAX(COALESCE(NULLIF(a.submitted_at,''), a.started_at)) AS last_activity
+            SUM(CASE WHEN a.submitted_at IS NOT NULL THEN 1 ELSE 0 END) AS submitted_count,
+            MAX(COALESCE(a.submitted_at, a.started_at)) AS last_activity
         FROM exams e
         LEFT JOIN exam_attempts a ON a.exam_id = e.id
         {$whereSql}

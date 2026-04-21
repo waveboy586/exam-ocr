@@ -3,13 +3,13 @@ import mysql.connector
 import sys
 import os
 
-# การตั้งค่า Database
+# การตั้งค่า Database (อ่านจาก env — ใช้ localhost เป็น fallback สำหรับ XAMPP)
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "exam_ocr",
-    "charset": "utf8mb4",
+    "host":     os.getenv("DB_HOST",     "localhost"),
+    "user":     os.getenv("DB_USER",     "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "database": os.getenv("DB_NAME",     "exam_ocr"),
+    "charset":  os.getenv("DB_CHARSET",  "utf8mb4"),
 }
 
 def save_to_mysql(json_path):
@@ -46,12 +46,22 @@ def save_to_mysql(json_path):
         sections = exam_data.get("sections", [])
         total_questions = 0
 
+        # ค่าที่ยอมรับได้ของ column section_type (ENUM)
+        VALID_SECTION_TYPES = {"multiple_choice", "short_answer", "subjective", "subjective_subparts"}
+
         for sec in sections:
             order = sec.get("section_order", 1)
             title = sec.get("section_title", "")
-            # Default type ถ้าไม่มีระบุ
-            sec_type = "mixed" 
-            
+            # เดา type จากคำถามใน section (ถ้า JSON ไม่ได้ระบุ)
+            sec_type = sec.get("type") or sec.get("section_type")
+            if not sec_type or sec_type not in VALID_SECTION_TYPES:
+                # ดูคำถามแรกเพื่อเดา type
+                first_q_type = (sec.get("questions") or [{}])[0].get("type", "")
+                if first_q_type in VALID_SECTION_TYPES:
+                    sec_type = first_q_type
+                else:
+                    sec_type = "multiple_choice"  # default ที่ปลอดภัย
+
             cursor.execute(
                 "INSERT INTO exam_sections (exam_id, section_order, section_title, section_type) VALUES (%s, %s, %s, %s)",
                 (exam_id, order, title, sec_type)
@@ -65,19 +75,19 @@ def save_to_mysql(json_path):
                 q_text = q.get("question")
                 q_type = q.get("type", "short_answer")
                 note = q.get("description", "") # ใช้ description เป็น note หรือคำอธิบายเพิ่มเติม
-                score = q.get("score") # รับคะแนนจาก JSON
+                score = q.get("score")  # รับคะแนนจาก JSON
                 # essay_answer สำหรับข้อเขียน
                 essay_ans = q.get("essay_answer", "")
                 try:
-                    q_score = float(q_score)
-                except:
+                    q_score = float(score)
+                except (TypeError, ValueError):
                     q_score = 1
                 if str(q_type).lower() in ["instruction", "header", "info"]:
                     q_score = 0
                 # Insert Question Main Data
                 cursor.execute(
                     "INSERT INTO questions(exam_id, section_id, number, question, type, answer, note, score)VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                    (exam_id, section_id, number, q_text, q_type, essay_ans, note, score)
+                    (exam_id, section_id, number, q_text, q_type, essay_ans, note, q_score)
                 )
                 question_id = cursor.lastrowid
                 total_questions += 1
